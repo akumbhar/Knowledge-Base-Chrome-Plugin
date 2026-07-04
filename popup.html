@@ -149,14 +149,24 @@
       <label for="provider">AI Provider</label>
       <select id="provider">
         <option value="local">Local (LM Studio)</option>
+        <option value="ollama">Ollama</option>
+        <option value="openai">OpenAI</option>
         <option value="claude">Claude (Anthropic)</option>
       </select>
 
       <div id="localFields">
-        <label for="baseUrl" style="margin-top:12px;">LM Studio Base URL</label>
+        <label for="baseUrl" id="baseUrlLabel" style="margin-top:12px;">LM Studio Base URL</label>
         <input type="text" id="baseUrl" placeholder="http://localhost:1234" autocomplete="off" />
+      </div>
+
+      <div id="modelFields">
         <label for="model" style="margin-top:12px;">Model (optional)</label>
         <input type="text" id="model" placeholder="auto-detect from /v1/models" autocomplete="off" />
+      </div>
+
+      <div id="openaiFields">
+        <label for="openaiApiKey" style="margin-top:12px;">OpenAI API Key</label>
+        <input type="password" id="openaiApiKey" placeholder="sk-..." autocomplete="off" />
       </div>
 
       <div id="claudeFields">
@@ -173,8 +183,9 @@
         <label for="autoSync" style="margin:0; text-transform:none; letter-spacing:0; font-weight:600; color:#334155;">Auto-sync new notes to Google Sheets</label>
       </div>
       <p class="hint">
-        Default uses your local LM Studio server (no API key) - make sure its server is running with a model loaded.
-        Switch to Claude to use Anthropic (needs a key). Google Sheets sync needs a Chrome Extension OAuth client ID in <code>manifest.json</code>.
+        Default uses LM Studio locally (no API key). Ollama uses its OpenAI-compatible API at
+        <code>http://localhost:11434</code>. OpenAI and Claude need API keys. Google Sheets sync
+        needs a Chrome Extension OAuth client ID in <code>manifest.json</code>.
       </p>
     </section>
 

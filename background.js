@@ -11,7 +11,7 @@
 const MENU_ID = "saveToKB";
 const TAGS = ["Interview Prep", "Reading Notes", "Research", "General"];
 const NOTES_KEY = "notes";
-const SETTINGS_KEY = "settings"; // { provider, baseUrl, model, claudeApiKey, autoSync }
+const SETTINGS_KEY = "settings"; // { provider, baseUrl, model, claudeApiKey, openaiApiKey, autoSync }
 const SPREADSHEET_KEY = "spreadsheetId"; // the one Knowledge Base spreadsheet
 const SHEET_TABS_KEY = "sheetTabs"; // string[] of tab titles known to exist
 const CUSTOM_TAGS_KEY = "customTags"; // string[] of user-created tags
@@ -29,7 +29,9 @@ const WEB_CLIENT_ID = "585055013789-17sg7664d3oe3cum42k7o1476v2ijt49.apps.google
 const GOOGLE_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 const GOOGLE_TOKEN_KEY = "googleToken"; // { accessToken, expiresAt }
 const CLAUDE_MODEL = "claude-3-5-haiku-latest";
+const OPENAI_MODEL = "gpt-4o-mini";
 const DEFAULT_BASE_URL = "http://localhost:1234"; // LM Studio default
+const DEFAULT_OLLAMA_URL = "http://localhost:11434"; // Ollama default
 
 // ---------------------------------------------------------------------------
 // Context menu setup
@@ -148,24 +150,31 @@ async function handleSaveNote(payload, sender) {
 }
 
 // ---------------------------------------------------------------------------
-// LLM provider layer. Default provider is a local LM Studio server exposing an
-// OpenAI-compatible API; Claude (Anthropic) is available as an option.
-// callLLM returns the assistant text or throws so callers can fall back.
+// LLM provider layer. Supports LM Studio, Ollama (OpenAI-compatible local APIs),
+// OpenAI, and Claude. callLLM returns the assistant text or throws so callers can fall back.
 // ---------------------------------------------------------------------------
 async function callLLM(system, user, maxTokens) {
   const settings = await getSettings();
-  if (settings.provider === "claude") {
-    return callClaude(settings, system, user, maxTokens);
+  if (settings.provider === "claude") return callClaude(settings, system, user, maxTokens);
+  if (settings.provider === "openai") return callOpenAI(settings, system, user, maxTokens);
+  if (settings.provider === "ollama") {
+    return callOpenAICompatible(settings, system, user, maxTokens, {
+      defaultBaseUrl: DEFAULT_OLLAMA_URL,
+      providerLabel: "Ollama",
+      missingModelHint: "No Ollama model found. Is Ollama running? Pull a model with `ollama pull <name>`.",
+    });
   }
-  return callLocal(settings, system, user, maxTokens);
+  return callOpenAICompatible(settings, system, user, maxTokens, {
+    defaultBaseUrl: DEFAULT_BASE_URL,
+    providerLabel: "LM Studio",
+    missingModelHint: "No local model found. Is LM Studio running with a model loaded and its server started?",
+  });
 }
 
-async function callLocal(settings, system, user, maxTokens) {
-  const baseUrl = (settings.baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, "");
+async function callOpenAICompatible(settings, system, user, maxTokens, opts) {
+  const baseUrl = (settings.baseUrl || opts.defaultBaseUrl).replace(/\/+$/, "");
   const model = settings.model || (await detectLocalModel(baseUrl));
-  if (!model) {
-    throw new Error("No local model found. Is LM Studio running with a model loaded and its server started?");
-  }
+  if (!model) throw new Error(opts.missingModelHint);
   const messages = [];
   if (system) messages.push({ role: "system", content: system });
   messages.push({ role: "user", content: user });
@@ -175,10 +184,32 @@ async function callLocal(settings, system, user, maxTokens) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.3, stream: false }),
   });
-  if (!res.ok) throw new Error(`LM Studio error ${res.status}: ${await safeText(res)}`);
+  if (!res.ok) throw new Error(`${opts.providerLabel} error ${res.status}: ${await safeText(res)}`);
   const data = await res.json();
   const txt = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-  if (!txt) throw new Error("Empty response from local model");
+  if (!txt) throw new Error(`Empty response from ${opts.providerLabel}`);
+  return txt;
+}
+
+async function callOpenAI(settings, system, user, maxTokens) {
+  if (!settings.openaiApiKey) throw new Error("No OpenAI API key set");
+  const model = settings.model || OPENAI_MODEL;
+  const messages = [];
+  if (system) messages.push({ role: "system", content: system });
+  messages.push({ role: "user", content: user });
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${settings.openaiApiKey}`,
+    },
+    body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.3 }),
+  });
+  if (!res.ok) throw new Error(`OpenAI error ${res.status}: ${await safeText(res)}`);
+  const data = await res.json();
+  const txt = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+  if (!txt) throw new Error("Empty response from OpenAI");
   return txt;
 }
 
@@ -684,11 +715,15 @@ async function getNotes() {
 async function getSettings() {
   const store = await chrome.storage.local.get(SETTINGS_KEY);
   const s = store[SETTINGS_KEY] || {};
+  const provider = s.provider || "local";
+  const defaultBase =
+    provider === "ollama" ? DEFAULT_OLLAMA_URL : DEFAULT_BASE_URL;
   return {
-    provider: s.provider || "local",
-    baseUrl: s.baseUrl || DEFAULT_BASE_URL,
+    provider,
+    baseUrl: s.baseUrl || defaultBase,
     model: s.model || "",
     claudeApiKey: s.claudeApiKey || "",
+    openaiApiKey: s.openaiApiKey || "",
     autoSync: !!s.autoSync,
   };
 }

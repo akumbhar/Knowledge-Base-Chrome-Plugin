@@ -7,6 +7,7 @@ const SETTINGS_KEY = "settings";
 const CUSTOM_TAGS_KEY = "customTags";
 const DIGESTS_KEY = "digests";
 const DEFAULT_BASE_URL = "http://localhost:1234";
+const DEFAULT_OLLAMA_URL = "http://localhost:11434";
 
 const state = {
   notes: [],
@@ -30,8 +31,12 @@ const els = {
   baseUrl: document.getElementById("baseUrl"),
   model: document.getElementById("model"),
   localFields: document.getElementById("localFields"),
+  modelFields: document.getElementById("modelFields"),
   claudeFields: document.getElementById("claudeFields"),
+  openaiFields: document.getElementById("openaiFields"),
   apiKey: document.getElementById("apiKey"),
+  openaiApiKey: document.getElementById("openaiApiKey"),
+  baseUrlLabel: document.getElementById("baseUrlLabel"),
   saveKey: document.getElementById("saveKey"),
   clearKey: document.getElementById("clearKey"),
   autoSync: document.getElementById("autoSync"),
@@ -95,18 +100,41 @@ function allTags() {
 async function loadSettings() {
   const store = await chrome.storage.local.get(SETTINGS_KEY);
   const s = store[SETTINGS_KEY] || {};
-  els.provider.value = s.provider || "local";
-  els.baseUrl.value = s.baseUrl || DEFAULT_BASE_URL;
+  const provider = s.provider || "local";
+  els.provider.value = provider;
+  els.baseUrl.value =
+    s.baseUrl ||
+    (provider === "ollama" ? DEFAULT_OLLAMA_URL : DEFAULT_BASE_URL);
   els.model.value = s.model || "";
   els.apiKey.value = s.claudeApiKey || "";
+  els.openaiApiKey.value = s.openaiApiKey || "";
   els.autoSync.checked = !!s.autoSync;
   toggleProviderFields();
 }
 
 function toggleProviderFields() {
-  const isLocal = els.provider.value !== "claude";
-  if (els.localFields) els.localFields.style.display = isLocal ? "" : "none";
-  if (els.claudeFields) els.claudeFields.style.display = isLocal ? "none" : "";
+  const p = els.provider.value;
+  if (els.localFields) els.localFields.style.display = p === "local" || p === "ollama" ? "" : "none";
+  if (els.modelFields) els.modelFields.style.display = p === "claude" ? "none" : "";
+  if (els.claudeFields) els.claudeFields.style.display = p === "claude" ? "" : "none";
+  if (els.openaiFields) els.openaiFields.style.display = p === "openai" ? "" : "none";
+
+  if (els.baseUrlLabel) {
+    els.baseUrlLabel.textContent =
+      p === "ollama" ? "Ollama Base URL" : "LM Studio Base URL";
+  }
+  if (els.baseUrl) {
+    els.baseUrl.placeholder =
+      p === "ollama" ? DEFAULT_OLLAMA_URL : DEFAULT_BASE_URL;
+  }
+  if (els.model) {
+    els.model.placeholder =
+      p === "openai"
+        ? "gpt-4o-mini"
+        : p === "ollama"
+          ? "llama3.2 (or auto-detect)"
+          : "auto-detect from /v1/models";
+  }
 }
 
 function wireEvents() {
@@ -128,7 +156,11 @@ function wireEvents() {
   els.saveKey.addEventListener("click", saveSettings);
   els.autoSync.addEventListener("change", saveSettings);
   els.clearKey.addEventListener("click", () => {
-    els.apiKey.value = "";
+    if (els.provider.value === "openai") {
+      els.openaiApiKey.value = "";
+    } else {
+      els.apiKey.value = "";
+    }
     saveSettings();
   });
 
@@ -153,11 +185,15 @@ function wireEvents() {
 }
 
 async function saveSettings() {
+  const provider = els.provider.value;
+  const defaultBase =
+    provider === "ollama" ? DEFAULT_OLLAMA_URL : DEFAULT_BASE_URL;
   const settings = {
-    provider: els.provider.value,
-    baseUrl: els.baseUrl.value.trim() || DEFAULT_BASE_URL,
+    provider,
+    baseUrl: els.baseUrl.value.trim() || defaultBase,
     model: els.model.value.trim(),
     claudeApiKey: els.apiKey.value.trim(),
+    openaiApiKey: els.openaiApiKey.value.trim(),
     autoSync: els.autoSync.checked,
   };
   await chrome.storage.local.set({ [SETTINGS_KEY]: settings });
