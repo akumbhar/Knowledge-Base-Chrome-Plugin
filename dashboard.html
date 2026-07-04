@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Knowledge Base Dashboard</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #ffffff;
+        --muted: #64748b;
+        --border: #e2e8f0;
+        --accent: #6366f1;
+        --accent-dark: #4f46e5;
+        --soft: #f8fafc;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        color: var(--bg);
+        background: var(--soft);
+        min-height: 100vh;
+      }
+      .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px 48px; }
+
+      header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 20px 24px; background: var(--panel); border-bottom: 1px solid var(--border);
+        position: sticky; top: 0; z-index: 10;
+      }
+      header .inner { max-width: 1040px; margin: 0 auto; width: 100%; display: flex; align-items: center; justify-content: space-between; }
+      .brand { display: flex; align-items: center; gap: 10px; }
+      .brand .logo { width: 34px; height: 34px; border-radius: 10px; display: block; }
+      .brand h1 { font-size: 19px; font-weight: 800; }
+      .brand .sub { font-size: 12px; color: var(--muted); font-weight: 500; }
+      .icon-btn { border: none; background: transparent; cursor: pointer; font-size: 18px; color: var(--muted); border-radius: 8px; padding: 8px 10px; }
+      .icon-btn:hover { background: var(--soft); }
+
+      .banner { font-size: 13px; padding: 10px 24px; text-align: center; display: none; }
+      .banner.show { display: block; }
+      .banner.ok { background: #dcfce7; color: #166534; }
+      .banner.err { background: #fee2e2; color: #991b1b; }
+
+      .settings select { width: 100%; max-width: 460px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 9px; font-size: 13px; background: #fff; outline: none; }
+      .search-row { display: flex; gap: 10px; }
+      .search-row .search { flex: 1; }
+      .btn.summarize { white-space: nowrap; }
+      .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+      .digest { display: none; }
+      .digest.show { display: block; margin-top: 22px; padding: 20px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; }
+      .digest-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+      .digest-title { font-size: 15px; font-weight: 800; }
+      .digest-meta { display: block; font-size: 12px; color: var(--muted); font-weight: 500; margin-top: 3px; }
+      .digest-actions { display: flex; gap: 8px; flex-shrink: 0; }
+      .digest-btn { cursor: pointer; border: 1px solid var(--border); background: var(--soft); color: #334155; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; }
+      .digest-btn:hover { background: #e2e8f0; }
+      .digest-loading { font-size: 14px; color: var(--muted); }
+
+      .md { line-height: 1.6; font-size: 14px; color: #334155; }
+      .md p { margin: 0 0 8px; }
+      .md p:last-child { margin-bottom: 0; }
+      .md ul, .md ol { margin: 6px 0 10px 20px; }
+      .md li { margin: 3px 0; }
+      .md h2, .md h3, .md h4 { font-weight: 700; margin: 14px 0 6px; }
+      .md h2 { font-size: 16px; }
+      .md h3, .md h4 { font-size: 14px; }
+      .md code { background: #f1f5f9; padding: 2px 5px; border-radius: 5px; font-size: 13px; }
+      .md pre { background: #f1f5f9; padding: 12px; border-radius: 10px; overflow: auto; margin: 8px 0; }
+      .md pre code { background: none; padding: 0; }
+      .md a { color: var(--accent); }
+      .md strong { font-weight: 700; }
+      .note-summary.md { font-size: 13px; }
+
+      .settings { display: none; background: #eef2ff; border-bottom: 1px solid var(--border); }
+      .settings.open { display: block; }
+      .settings .inner { max-width: 1040px; margin: 0 auto; padding: 18px 24px; }
+      .settings label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 6px; }
+      .settings input[type="password"], .settings input[type="text"] { width: 100%; max-width: 460px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 9px; font-size: 13px; outline: none; }
+      .row { display: flex; gap: 8px; margin-top: 10px; }
+      .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13px; color: #334155; }
+      .hint { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.5; max-width: 640px; }
+      .btn { cursor: pointer; border-radius: 9px; padding: 9px 16px; font-size: 13px; font-weight: 600; border: 1px solid transparent; }
+      .btn.primary { background: var(--accent); color: #fff; }
+      .btn.primary:hover { background: var(--accent-dark); }
+      .btn.secondary { background: #fff; color: #334155; border-color: var(--border); }
+      .btn.secondary:hover { background: var(--soft); }
+
+      .toolbar { margin-top: 24px; display: flex; flex-direction: column; gap: 14px; }
+      .search { width: 100%; padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px; font-size: 15px; outline: none; background: #fff; }
+      .search:focus { border-color: var(--accent); }
+      .filters { display: flex; flex-wrap: wrap; gap: 8px; }
+      .chip { cursor: pointer; border: 1px solid var(--border); background: #fff; color: #334155; border-radius: 999px; padding: 7px 16px; font-size: 13px; font-weight: 600; }
+      .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+      .list { margin-top: 22px; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+      .note { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; }
+      .note-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+      .note-head-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+      .note-title { font-size: 15px; font-weight: 700; line-height: 1.35; min-width: 0; }
+      .badge { flex-shrink: 0; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: #eef2ff; color: var(--accent-dark); white-space: nowrap; }
+      .note-summary { font-size: 13px; color: #475569; margin-top: 8px; line-height: 1.5; }
+      .note-text { font-size: 12px; color: #94a3b8; margin-top: 8px; max-height: 80px; overflow: hidden; line-height: 1.5; }
+      .note-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--soft); }
+      .src { font-size: 12px; color: var(--accent); text-decoration: none; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .src:hover { text-decoration: underline; }
+      .synced { font-size: 11px; color: #16a34a; font-weight: 700; white-space: nowrap; }
+      .del { border: none; background: transparent; cursor: pointer; color: #cbd5e1; font-size: 15px; flex-shrink: 0; }
+      .del:hover { color: #dc2626; }
+
+      .empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 80px 20px; }
+      .empty .big { font-size: 44px; margin-bottom: 12px; }
+      .empty p { font-size: 15px; line-height: 1.6; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="inner">
+        <div class="brand">
+          <img class="logo" src="icons/icon48.png" alt="Knowledge Base logo" />
+          <div>
+            <h1>Knowledge Base</h1>
+            <div class="sub">Your saved notes dashboard</div>
+          </div>
+        </div>
+        <div>
+          <button class="icon-btn" id="syncBtn" title="Sync to Google Sheets">&#8635;</button>
+          <button class="icon-btn" id="settingsBtn" title="Settings">&#9881;</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="banner" id="banner"></div>
+
+    <section class="settings" id="settings">
+      <div class="inner">
+        <label for="provider">AI Provider</label>
+        <select id="provider">
+          <option value="local">Local (LM Studio)</option>
+          <option value="claude">Claude (Anthropic)</option>
+        </select>
+
+        <div id="localFields">
+          <label for="baseUrl" style="margin-top:14px;">LM Studio Base URL</label>
+          <input type="text" id="baseUrl" placeholder="http://localhost:1234" autocomplete="off" />
+          <label for="model" style="margin-top:14px;">Model (optional)</label>
+          <input type="text" id="model" placeholder="auto-detect from /v1/models" autocomplete="off" />
+        </div>
+
+        <div id="claudeFields">
+          <label for="apiKey" style="margin-top:14px;">Claude API Key</label>
+          <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" />
+        </div>
+
+        <div class="row">
+          <button class="btn primary" id="saveKey">Save</button>
+          <button class="btn secondary" id="clearKey">Clear key</button>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="autoSync" />
+          <label for="autoSync" style="margin:0; text-transform:none; letter-spacing:0; font-weight:600; color:#334155;">Auto-sync new notes to Google Sheets</label>
+        </div>
+        <p class="hint">
+          Default uses your local LM Studio server (no API key) - make sure its server is running with a model loaded.
+          Switch to Claude to use Anthropic (needs a key). Google Sheets sync needs a Chrome Extension OAuth client ID in <code>manifest.json</code>.
+        </p>
+      </div>
+    </section>
+
+    <div class="wrap">
+      <div class="toolbar">
+        <div class="search-row">
+          <input type="text" class="search" id="search" placeholder="Search notes..." />
+          <button class="btn primary summarize" id="summarizeBtn" title="AI summary of the selected tag">Summarize</button>
+        </div>
+        <div class="filters" id="filters"></div>
+      </div>
+      <div class="digest" id="digest"></div>
+      <div class="list" id="list"></div>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
