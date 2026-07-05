@@ -25,6 +25,7 @@ const els = {
   settings: document.getElementById("settings"),
   settingsBtn: document.getElementById("settingsBtn"),
   syncBtn: document.getElementById("syncBtn"),
+  restoreBtn: document.getElementById("restoreBtn"),
   summarizeBtn: document.getElementById("summarizeBtn"),
   digest: document.getElementById("digest"),
   provider: document.getElementById("provider"),
@@ -165,6 +166,7 @@ function wireEvents() {
   });
 
   els.syncBtn.addEventListener("click", syncToGoogleSheets);
+  if (els.restoreBtn) els.restoreBtn.addEventListener("click", restoreFromGoogleSheets);
   els.summarizeBtn.addEventListener("click", summarizeActiveTag);
 
   els.digest.addEventListener("click", (e) => {
@@ -315,6 +317,34 @@ function syncToGoogleSheets() {
     } else {
       showBanner(`Synced: ${resp.appended} added, ${resp.removed} removed`, hadErrors ? "err" : "ok");
     }
+  });
+}
+
+function restoreFromGoogleSheets() {
+  showBanner("Restoring from Google Sheets\u2026", "ok");
+  chrome.runtime.sendMessage({ type: "RESTORE_GDOCS" }, async (resp) => {
+    if (chrome.runtime.lastError || !resp || !resp.ok) {
+      const err =
+        (resp && resp.error) ||
+        (chrome.runtime.lastError && chrome.runtime.lastError.message) ||
+        "unknown error";
+      showBanner("Restore failed: " + err, "err");
+      return;
+    }
+    if (resp.imported === 0) {
+      if (resp.skipped > 0) {
+        showBanner(`Nothing to restore — ${resp.skipped} already local`, "ok");
+      } else {
+        showBanner("Nothing to restore — already up to date", "ok");
+      }
+      return;
+    }
+    let msg = `Restored ${resp.imported} note(s)`;
+    if (resp.skipped > 0) msg += ` (${resp.skipped} already local)`;
+    showBanner(msg, "ok");
+    await loadNotes();
+    buildFilters();
+    render();
   });
 }
 

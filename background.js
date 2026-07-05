@@ -90,6 +90,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true; // async
   }
 
+  if (msg.type === "RESTORE_GDOCS") {
+    restoreFromSheets()
+      .then((result) => sendResponse({ ok: true, ...result }))
+      .catch((err) => sendResponse({ ok: false, error: String(err) }));
+    return true; // async
+  }
+
   if (msg.type === "SUMMARIZE_TAG") {
     summarizeTag(msg.tag)
       .then((digest) => sendResponse({ ok: true, digest }))
@@ -410,6 +417,88 @@ async function syncAllNotes() {
   await chrome.storage.local.set({ [SHEET_TABS_KEY]: meta.map((s) => s.title) });
 
   return { appended, removed, total: notes.length, errors, spreadsheetId };
+}
+
+// Pull notes from the linked spreadsheet and merge into local storage.
+// Imports rows whose Note ID is not already present locally; skips duplicates.
+async function restoreFromSheets() {
+  const token = await getGoogleToken(true);
+  const store = await chrome.storage.local.get(SPREADSHEET_KEY);
+  const spreadsheetId = store[SPREADSHEET_KEY];
+  if (!spreadsheetId) {
+    throw new Error("No spreadsheet linked — sync at least once before restoring");
+  }
+
+  const notes = await getNotes();
+  const existingIds = new Set(notes.map((n) => n.id));
+  const meta = await getSheetsMeta(spreadsheetId, token);
+
+  let imported = 0;
+  let skipped = 0;
+  let legacySkipped = 0;
+
+  for (const sheet of meta) {
+    try {
+      const rows = await readTab(spreadsheetId, sheet.title, token);
+      if (!rows.length || !isSheetHeader(rows[0])) continue;
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || !row.length) continue;
+        const id = row[5] && String(row[5]).trim();
+        if (!id) {
+          legacySkipped += 1;
+          continue;
+        }
+        if (existingIds.has(id)) {
+          skipped += 1;
+          continue;
+        }
+        const note = parseSheetRow(row, sheet.title, spreadsheetId);
+        if (!note) continue;
+        notes.unshift(note);
+        existingIds.add(id);
+        imported += 1;
+        await rememberCustomTag(note.tag);
+      }
+    } catch (_) {
+      // Skip tabs that can't be read or don't match our format.
+    }
+  }
+
+  if (imported > 0) {
+    await chrome.storage.local.set({ [NOTES_KEY]: notes });
+  }
+
+  return { imported, skipped, legacySkipped, total: notes.length };
+}
+
+function isSheetHeader(row) {
+  if (!row || row.length < 6) return false;
+  return row[0] === SHEET_HEADER[0] && row[5] === SHEET_HEADER[5];
+}
+
+function parseSheetRow(row, tag, spreadsheetId) {
+  const id = String(row[5] || "").trim();
+  if (!id) return null;
+  return {
+    id,
+    text: row[3] || "",
+    aiTitle: row[1] || "Untitled",
+    aiSummary: row[2] || "",
+    tag: tag || "General",
+    url: row[4] || "",
+    title: "",
+    createdAt: parseSheetDate(row[0]),
+    exported: true,
+    spreadsheetId,
+  };
+}
+
+function parseSheetDate(dateStr) {
+  const parsed = Date.parse(String(dateStr || ""));
+  if (!Number.isNaN(parsed)) return new Date(parsed).toISOString();
+  return new Date().toISOString();
 }
 
 async function syncNote(noteId, interactive) {

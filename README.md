@@ -92,6 +92,18 @@ Enable **Auto-sync new notes to Google Sheets** in Settings to sync notes automa
 
 **Note:** The extension is the source of truth. Manual edits or deletions in Google Sheets may be overwritten on the next sync.
 
+### Restore from Google Sheets
+
+If local notes were lost (storage cleared, new browser profile, etc.) but you previously synced to Google Sheets, you can pull them back:
+
+1. Open the dashboard or popup and click the restore icon (↙) in the header
+2. Sign in with Google when prompted (same account used for sync)
+3. Notes are merged into local storage — only rows whose **Note ID** is not already local are imported
+
+Restore requires a prior sync (a linked spreadsheet must exist). Running restore again skips duplicates. Legacy sheet rows without a Note ID are skipped.
+
+After restoring, click **Sync** to confirm everything is aligned — no duplicate rows should be created because IDs match.
+
 ## Google Sheets setup (optional)
 
 Google Sheets sync uses OAuth via `chrome.identity.launchWebAuthFlow`. To use your own OAuth client instead of the bundled one:
